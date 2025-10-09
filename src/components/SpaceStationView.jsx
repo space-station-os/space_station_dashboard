@@ -56,32 +56,32 @@ export default function SpaceStationView() {
     const xacroUrl = "/models/iss/spacedata_ss.URDF"; // <- your xacro file
     const xacroLoader = new XacroLoader();
 
+    const loadFallbackURDF = () => {
+    const urdfLoader = new URDFLoader();
+    urdfLoader.packages = { iss: "/models/iss/" };
+    urdfLoader.load("/models/iss/spacedata_ss.urdf", (robot) => {
+        robot.scale.set(0.001, 0.001, 0.001);
+        scene.add(robot);
+        console.log("✅ Fallback URDF loaded!");
+    });
+    };
+
     xacroLoader.load(
-      xacroUrl,
-      (xml) => {
+    xacroUrl,
+    (xml) => {
         const urdfLoader = new URDFLoader();
         urdfLoader.workingPath = LoaderUtils.extractUrlBase(xacroUrl);
-        urdfLoader.packages = {
-          iss: "/models/iss/",
-        };
-
+        urdfLoader.packages = { iss: "/models/iss/" };
         const robot = urdfLoader.parse(xml);
         robot.scale.set(0.001, 0.001, 0.001);
-        robot.position.set(0, 0, 0);
         scene.add(robot);
-
-        // Auto center the view
-        const box = new THREE.Box3().setFromObject(robot);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3()).length();
-        controls.target.copy(center);
-        camera.position.copy(center).add(new THREE.Vector3(size * 0.5, size * 0.3, size * 0.8));
-        camera.lookAt(center);
-
         console.log("✅ ISS XACRO parsed and URDF loaded!");
-      },
-      undefined,
-      (err) => console.error("❌ Failed to load XACRO:", err)
+    },
+    undefined,
+    (err) => {
+        console.error("❌ Failed to load XACRO, trying URDF...", err);
+        loadFallbackURDF();
+    }
     );
 
     // --- Animate loop ---
