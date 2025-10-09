@@ -1,110 +1,144 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { LoaderUtils } from "three";
-import { XacroLoader } from "xacro-parser";
 import URDFLoader from "urdf-loader";
 
 export default function SpaceStationView() {
   const mountRef = useRef(null);
+  const rafRef = useRef(0);
 
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
 
-    // --- Scene setup ---
+    // Scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1e1e1e);
+    scene.background = new THREE.Color(0x000000);
 
-    // --- Camera ---
+    // Camera
     const camera = new THREE.PerspectiveCamera(
-      50,
+      45,
       container.clientWidth / container.clientHeight,
       0.01,
-      100
+      100000
     );
-    camera.position.set(0, 0.5, 1.2);
+    camera.position.set(0, 200, 400);
 
-    // --- Renderer ---
+    // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    if ("outputColorSpace" in renderer)
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
 
-    // --- Lights ---
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(2, 2, 2);
-    scene.add(ambientLight, dirLight);
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const dir = new THREE.DirectionalLight(0xffffff, 1);
+    dir.position.set(200, 400, 200);
+    scene.add(dir);
 
-    // --- Grid ---
-    const grid = new THREE.GridHelper(2, 20, 0x444444, 0x222222);
-    grid.material.transparent = true;
-    grid.material.opacity = 0.2;
-    scene.add(grid);
+    // Stars
+    const stars = new THREE.Points(
+      new THREE.BufferGeometry().setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(
+          Array.from({ length: 3000 }, () => THREE.MathUtils.randFloatSpread(6000)),
+          3
+        )
+      ),
+      new THREE.PointsMaterial({ color: 0xffffff, size: 2 })
+    );
+    scene.add(stars);
 
-    // --- Controls ---
+    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.enablePan = true;
-    controls.minDistance = 0.1;
-    controls.maxDistance = 5;
-    controls.target.set(0, 0, 0);
+    controls.enableZoom = true;
+    controls.minDistance = 1;
+    controls.maxDistance = 20000;
 
-    // --- Load from Xacro ---
-    const xacroUrl = "/models/iss/spacedata_ss.URDF"; // <- your xacro file
-    const xacroLoader = new XacroLoader();
+    // URDF loader
+    const loader = new URDFLoader();
+    loader.packages = { iss: "/models/iss/" };
+    const urdfUrl = "/models/iss/SD_SpaceStation_Ver05.urdf";
 
-    const loadFallbackURDF = () => {
-    const urdfLoader = new URDFLoader();
-    urdfLoader.packages = { iss: "/models/iss/" };
-    urdfLoader.load("/models/iss/spacedata_ss.urdf", (robot) => {
-        robot.scale.set(0.001, 0.001, 0.001);
-        scene.add(robot);
-        console.log("✅ Fallback URDF loaded!");
-    });
+    const addRobot = (robot) => {
+      // Debug traversal
+      let meshCount = 0;
+      robot.traverse((child) => {
+        if (child.isMesh) {
+          meshCount++;
+          if (!child.material || child.material.transparent) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: new THREE.Color(Math.random(), Math.random(), Math.random()),
+              metalness: 0.3,
+              roughness: 0.8,
+            });
+          }
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      console.log(`🛰️ ${meshCount} meshes found in URDF`);
+      scene.add(robot);
+
+      // Compute bounding box only if meshes exist
+      const box = new THREE.Box3().setFromObject(robot);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      console.log("Bounding box:", size, "center:", center);
+
+      // If size is invalid, abort auto-scale
+      if (!isFinite(size.length()) || size.length() < 0.001) {
+        console.warn("⚠️ Model has no visible geometry or wrong paths.");
+        return;
+      }
+
+      // Scale to reasonable range
+      const scale = 500 / size.length();
+      robot.scale.setScalar(scale);
+      robot.position.sub(center.multiplyScalar(scale));
+
+      // Position camera to see full object
+      const distance = size.length() * scale * 1.2;
+      camera.position.set(distance, distance * 0.6, distance);
+      controls.target.set(0, 0, 0);
+      controls.update();
+
+      console.log("✅ Visible model added, scale:", scale);
     };
 
-    xacroLoader.load(
-    xacroUrl,
-    (xml) => {
-        const urdfLoader = new URDFLoader();
-        urdfLoader.workingPath = LoaderUtils.extractUrlBase(xacroUrl);
-        urdfLoader.packages = { iss: "/models/iss/" };
-        const robot = urdfLoader.parse(xml);
-        robot.scale.set(0.001, 0.001, 0.001);
-        scene.add(robot);
-        console.log("✅ ISS XACRO parsed and URDF loaded!");
-    },
-    undefined,
-    (err) => {
-        console.error("❌ Failed to load XACRO, trying URDF...", err);
-        loadFallbackURDF();
-    }
+    loader.load(
+      urdfUrl,
+      (robot) => addRobot(robot),
+      undefined,
+      (err) => console.error("❌ URDF load error:", err)
     );
 
-    // --- Animate loop ---
+    // Animate
     const animate = () => {
-      requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
+      rafRef.current = requestAnimationFrame(animate);
     };
     animate();
 
-    // --- Handle resize ---
-    const handleResize = () => {
+    // Resize
+    const resize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", resize);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", resize);
       controls.dispose();
+      renderer.dispose();
       container.removeChild(renderer.domElement);
     };
   }, []);
@@ -114,12 +148,9 @@ export default function SpaceStationView() {
       ref={mountRef}
       style={{
         position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
+        inset: 0,
         overflow: "hidden",
-        backgroundColor: "#1e1e1e",
+        backgroundColor: "#545454",
       }}
     />
   );

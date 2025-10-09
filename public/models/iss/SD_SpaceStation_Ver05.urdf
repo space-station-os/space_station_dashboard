@@ -4,13 +4,13 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 3.14"/> 
       <geometry>
-        <mesh filename="/models/iss/meshes/SD_SpaceStation_Ver05.obj" scale="100 100 100"/>
+       <mesh filename="meshes/SD_SpaceStation_Ver05.dae" scale="100 100 100"/>
 
       </geometry>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="/models/iss/meshes/SD_SpaceStation_Ver05.obj" scale="100 100 100"/>
+       <mesh filename="meshes/SD_SpaceStation_Ver05.dae" scale="100 100 100"/>
 
       </geometry>
     </collision>
