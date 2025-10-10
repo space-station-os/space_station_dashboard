@@ -60,7 +60,7 @@ export default function SpaceStationView() {
     // URDF loader
     const loader = new URDFLoader();
     loader.packages = { iss: "/models/iss/" };
-    const urdfUrl = "/models/iss/SD_SpaceStation_Ver05.urdf";
+    const urdfUrl = "/models/iss/space_data.urdf";
 
     const addRobot = (robot) => {
       // Debug traversal
@@ -150,7 +150,7 @@ export default function SpaceStationView() {
         position: "absolute",
         inset: 0,
         overflow: "hidden",
-        backgroundColor: "#545454",
+        backgroundColor: "#1a1a1f",
       }}
     />
   );
