@@ -13,7 +13,7 @@ export default function SpaceStationView() {
 
     // Scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000);
+    scene.background = new THREE.Color(0x0b1224);
 
     // Camera
     const camera = new THREE.PerspectiveCamera(
@@ -150,7 +150,7 @@ export default function SpaceStationView() {
         position: "absolute",
         inset: 0,
         overflow: "hidden",
-        backgroundColor: "#1a1a1f",
+        backgroundColor: "#0b1224",
       }}
     />
   );
