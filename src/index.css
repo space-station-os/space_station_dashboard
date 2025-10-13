@@ -68,11 +68,31 @@ button:focus-visible {
 @tailwind components;
 @tailwind utilities;
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+
 
 /* optional global styling */
 html, body {
   font-family: 'Manrope', sans-serif;
+}
+
+.glow {
+  box-shadow: 0 0 10px rgba(0, 153, 255, 0.4);
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade {
+  animation: fade 0.6s ease-in-out;
+}
+
+@keyframes fadeText {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeText {
+  animation: fadeText 0.8s ease-in-out;
 }
