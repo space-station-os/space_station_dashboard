@@ -100,59 +100,12 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-[#0b0c10] text-white overflow-hidden relative">
       {/* ================= HEADER ================= */}
-      <header className="flex justify-between items-center px-6 py-3 bg-[#0d0f12] border-b border-gray-800 shadow-sm z-50">
-        {/* Left: Logo + Title */}
-        <div className="flex items-center gap-3">
-          <img
-            src="/SSOSlogo.jpg"
-            alt="SSOS Logo"
-            className="w-auto h-[26px] object-contain opacity-90"
-          />
-          <h1 className="text-xl font-semibold tracking-tight">
-            GNC <span className="text-blue-400 font-bold">Dashboard</span>
-          </h1>
-        </div>
-
-        {/* Center: System Status */}
-        <div className="flex items-center gap-8 text-sm text-gray-300">
-          <div className="flex items-center gap-2">
-            <span className="material-icons text-green-400 text-base">check_circle</span>
-            <span>Attitude:</span>
-            <span className="text-green-400 font-medium">{attitudeStatus}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="material-icons text-blue-400 text-base">settings</span>
-            <span>Control Mode:</span>
-            <span
-              className={`font-semibold ${
-                mode === "CMG" ? "text-blue-400" : "text-orange-400"
-              }`}
-            >
-              {mode === "CMG" ? "CMG Control" : "Thruster Control"}
-            </span>
-          </div>
-        </div>
-
-        {/* Right: Control Mode Toggle */}
-        <button
-          onClick={async () => {
-            const newMode = mode === "CMG" ? "Thruster" : "CMG";
-            const res = await callService("/gnc/set_mode", { mode: newMode });
-            if (res.success) setMode(newMode);
-          }}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-md font-semibold text-sm 
-                    transition-all shadow-sm ${
-                      mode === "CMG"
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : "bg-orange-600 hover:bg-orange-700"
-                    }`}
-          title="Toggle between CMG and Thruster Control"
-        >
-          <span className="material-icons text-white text-base">
-            {mode === "CMG" ? "rocket_launch" : "engineering"}
-          </span>
-          {mode === "CMG" ? "Switch to Thrusters" : "Switch to CMG"}
-        </button>
+      <header className="flex items-center px-6 py-3 bg-[#0d0f12] border-b border-gray-800 shadow-sm z-50">
+        <img
+          src="/SSOSlogo.jpg"
+          alt="Space Station OS"
+          className="h-[68px] object-contain opacity-90"
+        />
       </header>
 
 

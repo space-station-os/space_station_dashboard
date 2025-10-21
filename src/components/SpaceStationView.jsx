@@ -144,7 +144,7 @@ export default function SpaceStationView() {
     };
 
    
-    const urdfUrl = "/models/iss/space_data.urdf";
+    const urdfUrl = "/models/iss/ISS.urdf";
 
     const addRobot = (robot) => {
       let meshCount = 0;

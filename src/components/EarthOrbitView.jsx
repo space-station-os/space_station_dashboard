@@ -4,9 +4,15 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import URDFLoader from "urdf-loader";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { connectToRosBridge, subscribeTopic } from "../utils/rosbridge.js";
 
 export default function EarthWithStationView() {
   const mountRef = useRef(null);
+  const stationRef = useRef(null);
+  const latestPos = useRef(new THREE.Vector3(0, 0, 0));
+  const orbitTrailRef = useRef(null);
+  const orbitPoints = useRef([]);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -21,7 +27,7 @@ export default function EarthWithStationView() {
       60,
       container.clientWidth / container.clientHeight,
       0.1,
-      20000
+      1000000
     );
     camera.position.set(0, 3000, 8000);
 
@@ -29,36 +35,34 @@ export default function EarthWithStationView() {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    if ("outputColorSpace" in renderer)
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
 
     // --- Lights ---
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const sunlight = new THREE.DirectionalLight(0xffffff, 2);
-    sunlight.position.set(5000, 2000, 5000);
-    scene.add(sunlight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const sun = new THREE.DirectionalLight(0xffffff, 2);
+    sun.position.set(5000, 2000, 5000);
+    scene.add(sun);
 
     // --- Starfield background ---
-    const starGeometry = new THREE.BufferGeometry();
-    const starCount = 4000;
-    const starPositions = new Float32Array(starCount * 3);
-    for (let i = 0; i < starCount * 3; i++) {
-      starPositions[i] = (Math.random() - 0.5) * 20000;
-    }
-    starGeometry.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
-    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1.2 });
-    const starField = new THREE.Points(starGeometry, starMaterial);
+    const starCount = 9000;
+    const stars = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount * 3; i++) stars[i] = (Math.random() - 0.5) * 200000;
+    const starGeom = new THREE.BufferGeometry();
+    starGeom.setAttribute("position", new THREE.BufferAttribute(stars, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.5 });
+    const starField = new THREE.Points(starGeom, starMat);
     scene.add(starField);
 
-    // --- Earth (GLTF model) ---
+    // --- Earth (GLTF) ---
     const gltfLoader = new GLTFLoader();
     let earth = null;
     gltfLoader.load(
       "/models/earth.glb",
       (gltf) => {
         earth = gltf.scene;
-        earth.scale.set(1000, 1000, 1000); // make it planet-sized
+        earth.scale.set(300, 300, 300); // Adjusted scale
+        earth.position.set(0, -500, 0); // Slight lift to prevent orbit intersection
         scene.add(earth);
         console.log("✅ Earth loaded");
       },
@@ -66,64 +70,73 @@ export default function EarthWithStationView() {
       (err) => console.error("❌ Earth load error:", err)
     );
 
-    // --- Space Station (URDF model) ---
+    // --- ISS URDF model ---
     const urdfLoader = new URDFLoader();
     urdfLoader.workingPath = "/models/iss/";
-
-    // Register OBJ loader support for meshes
     urdfLoader.loadMeshFunc = (path, manager, onComplete) => {
       const objLoader = new OBJLoader(manager);
-      objLoader.load(
-        path,
-        (obj) => onComplete(obj),
-        undefined,
-        (err) => {
-          console.error("OBJ load error:", err);
-          onComplete(null);
-        }
-      );
+      objLoader.load(path, onComplete, undefined, () => onComplete(null));
     };
 
-    const urdfUrl = "/models/iss/space_data.urdf";
-    let station = null;
+    urdfLoader.load("/models/iss/space_data.urdf", (robot) => {
+      robot.traverse((child) => {
+        if (child.isMesh) {
+          child.material = new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            metalness: 0.5,
+            roughness: 0.5,
+          });
+        }
+      });
+      robot.scale.setScalar(5);
+      stationRef.current = robot;
+      scene.add(robot);
+      console.log("🛰️ Station loaded");
+    });
 
-    urdfLoader.load(
-      urdfUrl,
-      (robot) => {
-        station = robot;
-        let meshCount = 0;
-        robot.traverse((child) => {
-          if (child.isMesh) {
-            meshCount++;
-            if (!child.material || child.material.transparent) {
-              child.material = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(Math.random(), Math.random(), Math.random()),
-                metalness: 0.3,
-                roughness: 0.7,
-              });
-            }
-          }
-        });
-
-        console.log(`🛰️ ${meshCount} station meshes found`);
-        robot.scale.setScalar(5); // scale up for visibility
-        robot.position.set(0, 1500, 3000); // place near Earth
-        scene.add(robot);
-        console.log("✅ Station loaded and placed in orbit");
-      },
-      undefined,
-      (err) => console.error("❌ URDF load error:", err)
-    );
+    // --- Orbit trail ---
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+    const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+    orbitTrailRef.current = trailLine;
+    scene.add(trailLine);
 
     // --- Controls ---
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.enableZoom = true;
-    controls.minDistance = 1000;
-    controls.maxDistance = 15000;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.3;
-    controls.dampingFactor = 0.04;
+    controls.autoRotate = false; // we’ll manually rotate Earth
+    controls.minDistance = 100;
+    controls.maxDistance = 300000; // allow full zoom-out
+
+    // --- Connect to ROSBridge ---
+    connectToRosBridge("ws://localhost:9090");
+
+    // --- Subscribe to /gnc/pos_eci ---
+    const topic = subscribeTopic("/gnc/pos_eci", "geometry_msgs/Vector3", (msg) => {
+      const scale = 1000; // Match with Earth scale
+      const newPos = new THREE.Vector3(msg.x / scale, msg.z / scale, msg.y / scale);
+
+      if (!initializedRef.current && stationRef.current) {
+        stationRef.current.position.copy(newPos);
+        initializedRef.current = true;
+      }
+
+      latestPos.current.copy(newPos);
+      orbitPoints.current.push(newPos.clone());
+      if (orbitPoints.current.length > 500) orbitPoints.current.shift();
+
+      const positions = new Float32Array(orbitPoints.current.length * 3);
+      orbitPoints.current.forEach((p, i) => {
+        positions[i * 3] = p.x;
+        positions[i * 3 + 1] = p.y;
+        positions[i * 3 + 2] = p.z;
+      });
+      orbitTrailRef.current.geometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(positions, 3)
+      );
+      orbitTrailRef.current.geometry.computeBoundingSphere();
+    });
 
     // --- Animation loop ---
     const animate = () => {
@@ -132,8 +145,11 @@ export default function EarthWithStationView() {
       // Earth rotation
       if (earth) earth.rotation.y += 0.0003;
 
-      // Optional small station spin for visual realism
-      if (station) station.rotation.y += 0.0005;
+      // Station position
+      if (stationRef.current && initializedRef.current) {
+        stationRef.current.position.lerp(latestPos.current, 0.05);
+        if (earth) stationRef.current.lookAt(earth.position);
+      }
 
       controls.update();
       renderer.render(scene, camera);
@@ -142,11 +158,9 @@ export default function EarthWithStationView() {
 
     // --- Resize handler ---
     const handleResize = () => {
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      camera.aspect = w / h;
+      camera.aspect = container.clientWidth / container.clientHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      renderer.setSize(container.clientWidth, container.clientHeight);
     };
     window.addEventListener("resize", handleResize);
 
@@ -154,6 +168,7 @@ export default function EarthWithStationView() {
     return () => {
       window.removeEventListener("resize", handleResize);
       controls.dispose();
+      topic.unsubscribe?.();
       container.removeChild(renderer.domElement);
     };
   }, []);
@@ -168,8 +183,8 @@ export default function EarthWithStationView() {
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        cursor: "grab",
         backgroundColor: "#000",
+        cursor: "grab",
       }}
     />
   );
